@@ -1,0 +1,17 @@
+
+{
+    "name": "Check Duplicate",
+    "short_name": "Check Duplicate",
+    "start_url": "index.html",
+    "display": "standalone",
+    "background_color": "#151515",
+    "theme_color": "#2c4961",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "./assets/icon.png",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ]
+}
