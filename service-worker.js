@@ -5,6 +5,7 @@ const filestoCache = [
     './index.html',
     "./assets/icon.png",
     "./manifest.json",
+    "https://cdn.jsdelivr.net/npm/js-sha256@0.11.0/src/sha256.min.js",
     'https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;700&display=swap',
 ];
 self.addEventListener('install', e => {
