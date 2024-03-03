@@ -69,6 +69,37 @@
         a:hover {
             cursor: pointer;
         }
+
+        input[type="checkbox"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: var(--background);
+            margin: 5px;
+            min-width: 20px;
+            min-height: 20px;
+            max-width: 20px;
+            max-height: 20px;
+            border: 2px solid var(--accent);
+            border-radius: 4px;
+            margin-right: 10px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        input[type="checkbox"]:checked {
+            background-color: var(--accent);
+        }
+
+        input[type="checkbox"]:checked:after {
+            content: '';
+            position: absolute;
+            left: 10%;
+            top: 10%;
+            width: 80%;
+            height: 80%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M20.285 6.289a1 1 0 0 0-1.414 0l-11.36 11.36-4.95-4.95a1 1 0 1 0-1.414 1.414l5.657 5.657a1 1 0 0 0 1.414 0l12.067-12.067a1 1 0 0 0 0-1.414z"/></svg>') no-repeat center center;
+            background-size: contain;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;700&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -86,6 +117,11 @@
     </div>
     <i>Check if a file is a duplicate or not by getting their SHA256 hash, with everything done locally.</i><br><br>
     <button id="filePicker">Choose files</button><br><br>
+    <div style="display: flex; align-items: center;">
+        <input type="checkbox" id="incremental"><label for="incremental">Use a stream instead of ArrayBuffer (suggested
+            for
+            big files)</label>
+    </div><br><br>
     <h3 style="text-align: center;">Unique files: <span id="update">0</span></h3>
     <div class="secondContainer">
         <h2 style="margin-left: 4px;">File hash:</h2>
@@ -107,9 +143,12 @@
         <a id="htmlDownload" download="CheckDuplicate.html">Download webpage as HTML</a><a id="changeTheme">Change
             theme</a><a href="https://github.com/Dinoosauro/check-duplicate">View on GitHub</a>
     </div><br>
-    <i>Icon generated with Bing Image Creator, powered by DALL-E 3.</i>
+    <i>Icon generated with Bing Image Creator, powered by DALL-E 3. Generating SHA256 from a Stream is also possible
+        thanks to the <a href="https://github.com/emn178/js-sha256?tab=MIT-1-ov-file#readme" target="_blank">js-sha256
+            library</a></i>
     <input type="file" id="file" multiple style="display: none;">
     <!--Create a HTML input element so that the user can add multiple elements by clicking it multiple times-->
+    <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.11.0/src/sha256.min.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             let registration;
@@ -120,34 +159,52 @@
         }
         let finalArr = [];
         let scannedFiles = [];
-        document.getElementById("file").addEventListener("change", () => {
+        document.getElementById("file").addEventListener("change", async () => {
             for (let item of document.getElementById("file").files) {
                 if (scannedFiles.indexOf(item) !== -1) continue;
                 scannedFiles.push(item);
-                let file = new FileReader();
-                file.onload = async () => {
-                    const hashArray = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", file.result)));
-                    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-                    finalArr.push(hashHex);
-                    let container = document.createElement("tr");
-                    let nameDom = document.createElement("td");
-                    let nameUrl = document.createElement("a");
-                    nameUrl.textContent = item.name;
-                    nameUrl.addEventListener("click", () => {
-                        if (nameUrl.download !== "") return;
-                        nameUrl.download = item.name;
-                        nameUrl.href = URL.createObjectURL(new Blob([file.result]));
+                let hashHex = "";
+                if ((window.sha256 ?? "") !== "" && document.getElementById("incremental").checked) {
+                    hashHex = await new Promise((resolve) => {
+                        console.log("1");
+                        let hash = sha256.create();
+                        let reader = item.stream().getReader();
+                        function read() {
+                            reader.read().then(({ done, value }) => {
+                                if (!done) {
+                                    hash.update(value);
+                                    read();
+                                } else {
+                                    resolve(hash.digest('hex'));
+                                }
+                            });
+                        }
+                        read();
                     })
-                    nameDom.append(nameUrl);
-                    let hashDom = document.createElement("td");
-                    let hashContent = document.createElement("l");
-                    hashContent.textContent = hashHex;
-                    hashDom.append(hashContent);
-                    container.append(nameDom, hashDom);
-                    document.getElementById("addHash").append(container);
-                    document.getElementById("update").textContent = Array.from(new Set(finalArr)).length
+                } else {
+                    console.log("2");
+                    hashHex = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await item.arrayBuffer())));
                 }
-                file.readAsArrayBuffer(item)
+                hashHex = hashHex.map((b) => b.toString(16).padStart(2, "0")).join("");
+                finalArr.push(hashHex);
+                let container = document.createElement("tr");
+                let nameDom = document.createElement("td");
+                let nameUrl = document.createElement("a");
+                nameUrl.textContent = item.name;
+                nameUrl.addEventListener("click", async () => {
+                    if (nameUrl.download !== "") return;
+                    nameUrl.download = item.name;
+                    nameUrl.href = URL.createObjectURL(new Blob([await item.arrayBuffer()]));
+                    nameUrl.click();
+                })
+                nameDom.append(nameUrl);
+                let hashDom = document.createElement("td");
+                let hashContent = document.createElement("l");
+                hashContent.textContent = hashHex;
+                hashDom.append(hashContent);
+                container.append(nameDom, hashDom);
+                document.getElementById("addHash").append(container);
+                document.getElementById("update").textContent = Array.from(new Set(finalArr)).length
             }
         })
         document.getElementById("export").addEventListener("click", () => {
@@ -196,7 +253,7 @@
         changeIcon();
         if (localStorage.getItem("CheckDuplicate-Theme") === "a") document.getElementById("changeTheme").click();
         document.getElementById("htmlDownload").href = URL.createObjectURL(new Blob([document.documentElement.outerHTML]));
-        let appVersion = "1.0.0"
+        let appVersion = "1.1.0"
         fetch("./update.txt", { cache: "no-store" }).then((res) => res.text().then((text) => { if (text.replace("\n", "") !== appVersion) if (confirm(`There's a new version of Check Duplicate. Do you want to update? [${appVersion} --> ${text.replace("\n", "")}]`)) { caches.delete("checkduplicate-cache"); location.reload(true); } }).catch((e) => { console.error(e) })).catch((e) => console.error(e)); 
     </script>
 </body>
